@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Radar Pong (Solo)</title>
+    <style>
+        body {
+            margin: 0;
+            background: #0d1117;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #0f0;
+            font-family: monospace;
+            overflow: hidden;
+            cursor: none;
+        }
+
+        canvas {
+            background: #001f00;
+            border-radius: 50%;
+            box-shadow: 0 0 40px #0f0;
+        }
+
+        #score,
+        #speed {
+            position: absolute;
+            color: #0f0;
+            font-size: 18px;
+            line-height: 1.5;
+        }
+
+        #score {
+            top: 10px;
+            left: 20px;
+        }
+
+        #speed {
+            top: 10px;
+            right: 20px;
+        }
+
+        #red-cursor {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            background-color: red;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            box-shadow: 0 0 10px red;
+        }
+
+        #predictPathBtn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            background: #0f0;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="score">Hits: 0 | Best Streak: 0</div>
+    <div id="speed">Speed: 0 | Best: 0</div>
+    <canvas id="radar" width="500" height="500"></canvas>
+    <div id="red-cursor"></div>
+    <button id="predictPathBtn">Predict Path</button>
+    <script>
+        const canvas = document.getElementById("radar");
+        const ctx = canvas.getContext("2d");
+        const radius = canvas.width / 2;
+
+        let hits = parseInt(localStorage.getItem("hits")) || 0;
+        let bestStreak = parseInt(localStorage.getItem("bestStreak")) || 0;
+        let bestSpeed = parseFloat(localStorage.getItem("bestSpeed")) || 3.6;
+
+        let ball = { x: radius, y: radius, dx: 3, dy: 2, r: 6, speed: 3.6 };
+        let playerAngle = Math.PI / 2;
+        const paddleWidth = Math.PI / 6;
+        const paddleRadius = radius - 20;
+
+        let showPath = false;
+        document.getElementById("predictPathBtn").addEventListener("click", () => {
+            showPath = !showPath;
+            document.getElementById("predictPathBtn").textContent = showPath ? "Hide Path" : "Predict Path";
+        });
+
+        let sweepOffset = 0;
+
+        function drawRadar() {
+            ctx.fillStyle = "#000F00";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "#0f0";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(radius, radius, radius - 2, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+
+        function drawPaddle(angle, color) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 10;
+            ctx.beginPath();
+            ctx.arc(radius, radius, paddleRadius, angle - paddleWidth / 2, angle + paddleWidth / 2);
+            ctx.stroke();
+        }
+
+        function drawBall() {
+            ctx.fillStyle = "#0f0";
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.r, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        function updateBall() {
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            let dist = Math.sqrt((ball.x - radius) ** 2 + (ball.y - radius) ** 2);
+
+            if (dist + ball.r >= radius) {
+                let angleToCenter = Math.atan2(ball.y - radius, ball.x - radius);
+
+                if (checkPaddleHit(playerAngle, angleToCenter)) {
+                    // push ball outside paddle to avoid sticking
+                    ball.x = radius + (radius - ball.r) * Math.cos(angleToCenter);
+                    ball.y = radius + (radius - ball.r) * Math.sin(angleToCenter);
+                    reflectBall(angleToCenter);
+                    hits++;
+                    increaseSpeed();
+                } else {
+                    resetBall();
+                }
+                updateScore();
+            }
+        }
+
+        function reflectBall(angleToCenter) {
+            let ballAngle = Math.atan2(ball.dy, ball.dx);
+            let diff = ((ballAngle - playerAngle + Math.PI) % (2 * Math.PI)) - Math.PI;
+            let hitFactor = Math.abs(diff) > 0.05 ? diff / (paddleWidth / 2) : 0;
+            hitFactor = Math.max(-1, Math.min(1, hitFactor));
+
+            let norm = angleToCenter + Math.PI + hitFactor * (Math.PI / 3);
+            norm += (Math.random() - 0.5) * (Math.PI / 12);
+
+            ball.dx = ball.speed * Math.cos(norm);
+            ball.dy = ball.speed * Math.sin(norm);
+        }
+
+        function checkPaddleHit(paddleAngle, ballAngle) {
+            let diff = Math.abs(((ballAngle - paddleAngle + Math.PI) % (2 * Math.PI)) - Math.PI);
+            return diff < paddleWidth / 2;
+        }
+
+        function resetBall() {
+            ball.x = radius;
+            ball.y = radius;
+            ball.speed = 3.6;
+
+            let angle = Math.random() * 2 * Math.PI;
+            ball.dx = ball.speed * Math.cos(angle);
+            ball.dy = ball.speed * Math.sin(angle);
+
+            hits = 0;
+            updateScore();
+        }
+
+        function increaseSpeed() {
+            ball.speed *= 1.05;
+            if (ball.speed > bestSpeed) bestSpeed = ball.speed;
+            let angle = Math.atan2(ball.dy, ball.dx);
+            ball.dx = ball.speed * Math.cos(angle);
+            ball.dy = ball.speed * Math.sin(angle);
+        }
+
+        function updateScore() {
+            if (hits > bestStreak) bestStreak = hits;
+            localStorage.setItem("hits", hits);
+            localStorage.setItem("bestStreak", bestStreak);
+            localStorage.setItem("bestSpeed", bestSpeed);
+            document.getElementById("score").textContent = `Hits: ${hits} | Best Streak: ${bestStreak}`;
+        }
+
+        function updateSpeedDisplay() {
+            document.getElementById("speed").textContent = `Speed: ${ball.speed.toFixed(2)} | Best: ${bestSpeed.toFixed(2)}`;
+        }
+
+        function drawPredictedPath() {
+            let tempX = ball.x, tempY = ball.y, tempDX = ball.dx, tempDY = ball.dy;
+            let lastX = tempX, lastY = tempY;
+            let maxSteps = 300;
+
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+
+            for (let i = 0; i < maxSteps; i++) {
+                ctx.strokeStyle = `rgba(255,255,0,${0.8 * (1 - i / maxSteps)})`;
+                ctx.beginPath();
+                ctx.moveTo(tempX, tempY);
+
+                tempX += tempDX;
+                tempY += tempDY;
+
+                let dist = Math.sqrt((tempX - radius) ** 2 + (tempY - radius) ** 2);
+                if (dist + ball.r >= radius) {
+                    let angleToCenter = Math.atan2(tempY - radius, tempX - radius);
+                    let hit = checkPaddleHit(playerAngle, angleToCenter);
+
+                    let norm = angleToCenter + Math.PI;
+                    if (hit) {
+                        let diff = ((Math.atan2(tempY - radius, tempX - radius) - playerAngle + Math.PI) % (2 * Math.PI)) - Math.PI;
+                        let hitFactor = Math.abs(diff) > 0.05 ? diff / (paddleWidth / 2) : 0;
+                        hitFactor = Math.max(-1, Math.min(1, hitFactor));
+                        norm += hitFactor * (Math.PI / 3);
+                    }
+
+                    tempDX = ball.speed * Math.cos(norm);
+                    tempDY = ball.speed * Math.sin(norm);
+                    tempX = radius + (radius - ball.r) * Math.cos(angleToCenter);
+                    tempY = radius + (radius - ball.r) * Math.sin(angleToCenter);
+
+                    if (!hit) break;
+                }
+
+                ctx.lineTo(tempX, tempY);
+                ctx.stroke();
+                lastX = tempX; lastY = tempY;
+            }
+
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.arc(lastX, lastY, 6, 0, 2 * Math.PI);
+            ctx.fillStyle = "rgba(255,255,0,0.8)";
+            ctx.shadowBlur = 15; ctx.shadowColor = "yellow";
+            ctx.fill(); ctx.shadowBlur = 0;
+
+            sweepOffset += 0.02;
+        }
+
+        function gameLoop() {
+            drawRadar();
+            drawPaddle(playerAngle, "#0f0");
+            drawBall();
+            updateBall();
+            updateSpeedDisplay();
+            if (showPath) drawPredictedPath();
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener("mousemove", e => {
+            let mouseX = e.clientX - window.innerWidth / 2;
+            let mouseY = e.clientY - window.innerHeight / 2;
+            playerAngle = Math.atan2(mouseY, mouseX);
+
+            const redCursor = document.getElementById("red-cursor");
+            redCursor.style.left = e.clientX + "px";
+            redCursor.style.top = e.clientY + "px";
+        });
+
+        resetBall();
+        gameLoop();
+    </script>
+</body>
+
+</html>
