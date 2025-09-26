@@ -148,14 +148,32 @@
         function reflectBall(angleToCenter) {
             let ballAngle = Math.atan2(ball.dy, ball.dx);
             let diff = ((ballAngle - playerAngle + Math.PI) % (2 * Math.PI)) - Math.PI;
-            let hitFactor = Math.abs(diff) > 0.05 ? diff / (paddleWidth / 2) : 0;
+
+            let hitFactor = diff / (paddleWidth / 2);
             hitFactor = Math.max(-1, Math.min(1, hitFactor));
 
-            let norm = angleToCenter + Math.PI + hitFactor * (Math.PI / 3);
-            norm += (Math.random() - 0.5) * (Math.PI / 12);
+            let edgeInfluence = Math.max(0, (Math.abs(hitFactor) - 0.6) / 0.4); 
+            edgeInfluence = Math.min(1, edgeInfluence);
 
-            ball.dx = ball.speed * Math.cos(norm);
-            ball.dy = ball.speed * Math.sin(norm);
+            let baseReflectionAngle = angleToCenter + Math.PI;
+
+            if (edgeInfluence > 0) {
+                let normalVariation = hitFactor * (Math.PI / 4) * (1 - edgeInfluence);
+                let straightAngle = angleToCenter + Math.PI;
+
+                let finalAngle = straightAngle * edgeInfluence +
+                    (baseReflectionAngle + normalVariation) * (1 - edgeInfluence);
+
+                ball.dx = ball.speed * Math.cos(finalAngle);
+                ball.dy = ball.speed * Math.sin(finalAngle);
+            } else {
+                // Normal center hit
+                let controlledAngleVariation = hitFactor * (Math.PI / 4);
+                let finalAngle = baseReflectionAngle + controlledAngleVariation;
+
+                ball.dx = ball.speed * Math.cos(finalAngle);
+                ball.dy = ball.speed * Math.sin(finalAngle);
+            }
         }
 
         function checkPaddleHit(paddleAngle, ballAngle) {
